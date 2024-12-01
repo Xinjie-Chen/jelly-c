@@ -4,6 +4,7 @@ mod lexer;
 mod parser;
 mod codegen;
 mod emit;
+mod common;
 
 pub fn run(cli: &Cli) {
 	match cli {
