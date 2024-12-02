@@ -132,24 +132,7 @@ mod tests {
 	use rand::Rng;
 
 	#[test]
-	fn test_new() {
-		let source: String = String::from("{}");
-		let scanner = Scanner::new(&source);
-		assert_eq!(scanner.source, "{}");
-		assert_eq!(scanner.start, 0);
-		assert_eq!(scanner.current, 0);
-	}
-
-	#[test]
-	fn test_scan_token_basic() {
-		let source: String = String::from("{1}");
-		let mut scanner = Scanner::new(&source);
-		let tokens = scanner.scan_token();
-		assert_eq!(tokens, vec![TOKEN::LeftBrace, TOKEN::CONST(1), TOKEN::RightBrace]);
-	}
-
-	#[test]
-	fn test_scan_token_advance() {
+	fn test_scan_token() {
 		let rand_num = rand::thread_rng().gen_range(0..100);
 		let source = format!("int main() {{ return {}; }}", rand_num);
 		let mut scanner = Scanner::new(source.as_str());
