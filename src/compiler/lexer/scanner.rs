@@ -1,4 +1,5 @@
 use std::{clone, fs};
+use log::debug;
 use std::collections::HashMap;
 
 macro_rules! hash {
@@ -11,7 +12,7 @@ macro_rules! hash {
 
 #[derive(Debug, PartialEq, Clone)]
 #[allow(dead_code)]
-enum TOKEN {
+pub enum TOKEN {
 	LeftParen,
 	RightParen,
 	LeftBrace,
@@ -24,29 +25,35 @@ enum TOKEN {
 	IDENTIFIER(String),
 }
 
-struct Scanner<'a> {
+pub struct Scanner<'a> {
 	source: &'a str,
 	start: i32,
 	current: i32,
+	line: i32,
 	keywords: HashMap<String, TOKEN>,
+	err: bool,
 }
 
+#[allow(dead_code)]
 impl<'a> Scanner<'a> {
-	fn new(source: &'a str) -> Self {
+	pub fn new(source: &'a str) -> Self {
 		Scanner {
 			source,
 			start: 0,
 			current: 0,
+			line: 1,
 			keywords: hash![
 				("int".to_string(), TOKEN::Int),
 				("void".to_string(), TOKEN::Void),
 				("return".to_string(), TOKEN::Return)
 			],
+			err: false,
 		}
 	}
 
-	fn scan_token(&mut self) -> Vec<TOKEN> {
+	pub fn scan_token(&mut self) -> Result<Vec<TOKEN>, Vec<ScanErr>> {
 		let mut tokens: Vec<TOKEN> = Vec::new();
+		let mut errors: Vec<ScanErr> = Vec::new();
 		while self.current < self.source.len() as i32 {
 			self.start = self.current;
 			let c = self.advance();
@@ -56,10 +63,20 @@ impl<'a> Scanner<'a> {
 				'{' => tokens.push(TOKEN::LeftBrace),
 				'}' => tokens.push(TOKEN::RightBrace),
 				';' => tokens.push(TOKEN::Semicolon),
+				' ' => (),
+				'\t' => (),
+				'\n' => self.line += 1,
 				_ => {
 					if c.is_ascii_digit() {
 						while self.peek().is_ascii_digit() {
 							self.advance();
+						}
+						if self.peek().is_alphabetic() || self.peek() == '_' {
+							self.err = true;
+							errors.push(ScanErr {
+								line: self.line,
+								message: "Invalid number".to_string(),
+							});
 						}
 						let num: i32 = self.source[self.start as usize..self.current as usize]
 							.parse()
@@ -75,11 +92,20 @@ impl<'a> Scanner<'a> {
 						} else {
 							tokens.push(TOKEN::IDENTIFIER(value));
 						}
+					} else {
+						self.err = true;
+						errors.push(ScanErr {
+							line: self.line,
+							message: format!("Unexpected character: {}", c),
+						});
 					}
 				} 
 			}
 		}
-		tokens
+		match self.err {
+			true => Err(errors),
+			false => Ok(tokens)
+		}
 	}
 
 	fn advance(&mut self) -> char{
@@ -125,6 +151,13 @@ impl<'a> Scanner<'a> {
 	}
 }
 
+#[derive(Debug, PartialEq)]
+#[allow(dead_code)]
+pub struct ScanErr {
+	line: i32,
+	message: String,
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -132,11 +165,12 @@ mod tests {
 	use rand::Rng;
 
 	#[test]
-	fn test_scan_token() {
-		let rand_num = rand::thread_rng().gen_range(0..100);
-		let source = format!("int main() {{ return {}; }}", rand_num);
+	fn test_scan_token_valid() {
+		env_logger::init();
+		let rand_num = rand::thread_rng().gen_range(0..9999);
+		let source = format!("  int 	main() \n{{ return  {};   \n}}", rand_num);
 		let mut scanner = Scanner::new(source.as_str());
-		let tokens = scanner.scan_token();
+		let tokens = scanner.scan_token().expect("scan token failed");
 		assert_eq!(tokens, vec![
 			TOKEN::Int,
 			TOKEN::IDENTIFIER("main".to_string()),
@@ -148,5 +182,23 @@ mod tests {
 			TOKEN::Semicolon,
 			TOKEN::RightBrace
 			]);
+	}
+
+	#[test]
+	fn test_scan_token_invalid() {
+		let source = format!("int %main() {{ return 1foo }}");
+		let mut scanner = Scanner::new(source.as_str());
+		assert_eq!(scanner.scan_token(), Err(
+			vec![
+				ScanErr {
+					line: 1,
+					message: "Unexpected character: %".to_string()
+				},
+				ScanErr {
+					line: 1,
+					message: "Invalid number".to_string()
+				}
+			]
+		));
 	}
 }

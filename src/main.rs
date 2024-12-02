@@ -38,5 +38,5 @@ fn main() {
 
   preprocessor::run(&cli);
   compiler::run(&cli);
-  assembler::run(&cli);
+  // assembler::run(&cli);
 }
